@@ -1,3 +1,6 @@
+### Based in a Script from https://github.com/bkvirendra/didyoumean
+# encoding: utf-8
+unicode("utf-8")
 import os
 import urllib2
 import io
@@ -11,8 +14,10 @@ from StringIO import StringIO
 
 def getPage(url):
     request = urllib2.Request(url)
+    #request.add_header("Content-Type", "text/plain;charset=UTF-8")
     request.add_header('Accept-encoding', 'gzip')
-    request.add_header('User-Agent','Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_3) AppleWebKit/535.20 (KHTML, like Gecko) Chrome/19.0.1036.7 Safari/535.20')
+    request.add_header('User-Agent','"Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0"')
+
     response = urllib2.urlopen(request)
     if response.info().get('Content-Encoding') == 'gzip':
         buf = StringIO( response.read())
@@ -22,24 +27,37 @@ def getPage(url):
         data = response.read()
     return data
 
-def didYouMean(q):
+def didYouMean(q, encrypted=False, context=""):
     q = str(str.lower(q)).strip()
-    url = "http://www.google.com/search?q=" + urllib.quote(q)
+    if encrypted:
+        url = "https://encrypted.google.com/search?q=" + urllib.quote(q + " " + context)
+    else:
+        url = "https://www.google.com/search?q=" + urllib.quote(q + " " + context)    
     html = getPage(url)
-    soup = BeautifulSoup(html)
-    ans = soup.find('a', attrs={'class' : 'spell'})
+    soup = BeautifulSoup(html, "lxml")
+    
     try:
-        result = repr(ans.contents)
-        result = result.replace("u'","")
-        result = result.replace("/","")
-        result = result.replace("<b>","")
-        result = result.replace("<i>","")
-        result = re.sub('[^A-Za-z0-9\s]+', '', result)
-        result = re.sub(' +',' ',result)
+        ans = soup.find("a", attrs={'class' : 'spell'})
+        if len(ans.text) == 0:
+            return q        
+        result = ans.text
+        if len(context) !=0:
+             result = [word for word in result.split(" ") if word not in unicode(context, "utf-8")]
+             result = " ".join(result)
     except AttributeError:
-        result = 1
+        return False
+   
     return result
+
+def spell_check_document(document, window=6):
+    document = document.split(" ")
+    document = [" ".join(document[i:i+window]) for i in range(0, len(document), window)]
+    corrected_chuncks = []
+    print(document)
+    for chunck in document:
+        corrected_chuncks.append(didYouMean(chunck))
+    return " ".join(corrected_chuncks)
+
 
 if __name__ == "__main__":
     response = didYouMean(sys.argv[1])
-    print response
